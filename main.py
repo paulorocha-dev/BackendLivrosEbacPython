@@ -10,12 +10,13 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from typing import Optional
 import secrets
+import os
 
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-DATABASE_URL = "sqlite:///./livros.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -31,8 +32,8 @@ app = FastAPI(
     }
 )
 
-meu_usuario = "admin"
-minha_senha = "admin123"
+MEU_USUARIO = os.getenv("MEU_USUARIO")
+MINHA_SENHA = os.getenv("MINHA_SENHA")
 
 security = HTTPBasic()
 
@@ -62,8 +63,8 @@ def sessao_db():
 
 
 def autenticar_meu_usuario(credentials: HTTPBasicCredentials = Depends(security)):
-    is_username_correct = secrets.compare_digest(credentials.username, meu_usuario)
-    is_password_correct = secrets.compare_digest(credentials.password, minha_senha)
+    is_username_correct = secrets.compare_digest(credentials.username, MEU_USUARIO)
+    is_password_correct = secrets.compare_digest(credentials.password, MINHA_SENHA)
 
     if not (is_username_correct and is_password_correct):
         raise HTTPException(
@@ -72,6 +73,10 @@ def autenticar_meu_usuario(credentials: HTTPBasicCredentials = Depends(security)
             headers={"WWW-Authenticate": "Basic"},
         )
 
+@app.get("/")
+
+def hello_world():
+    return {"message": "Olá, Mundo! A API de Livros está funcionando."}
 
 @app.get("/livros")
 def get_livros(page: int = 1, limit: int = 10, db: Session = Depends(sessao_db), credentials: HTTPBasicCredentials = Depends(autenticar_meu_usuario)):

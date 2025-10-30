@@ -1,0 +1,19 @@
+version: "3.8"
+
+# Serviços que serão orquestrados pelo Docker Compose
+services:
+  app:
+    build: . # Irá construir a imagem a partir do Dockerfile na raiz do projeto
+    container_name: livros-api
+    ports: # Mapeia a porta 8000 do container para a porta 8000 do host
+      - "8000:8000"
+    volumes: # Mapeia o diretório atual para /app dentro do container
+      - .:/app
+    env_file: # Carrega variáveis de ambiente do arquivo .env 
+      - .env
+    command: ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    deploy:
+      replicas: 5
+      restart_policy:
+        condition: on-failure
+        
