@@ -12,6 +12,8 @@ from typing import Optional
 import secrets
 import os
 from dotenv import load_dotenv
+import redis
+import json
 
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -26,6 +28,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+redis_client = redis.Redis(host='redis-server', port=6379, db=0, decode_responses=True)
 
 app = FastAPI(
     title="API de Livros",
@@ -59,6 +63,12 @@ class Livro(BaseModel):
 
 Base.metadata.create_all(bind=engine)
 
+def salvar_livro_redis(livro_id: int, livro: Livro):
+    redis_client.set(f"livro:{livro_id}", json.dumps(livro.model_dump()))
+
+def deletar_livro_redis(livro_id: int):
+    redis_client.delete(f"livro:{livro_id}")
+
 def sessao_db():
     db = SessionLocal()
     try:
@@ -82,51 +92,63 @@ def autenticar_meu_usuario(credentials: HTTPBasicCredentials = Depends(security)
 def hello_world():
     return {"message": "Olá, Mundo! A API de Livros está funcionando."}
 
-async def chamadas_externas_1():
-    await asyncio.sleep(2)
-    return "Resultado da chamada externa 1"
+@app.get("/debug/redis")
+def ver_livros_redis():
+    chaves = redis_client.keys("livros:*")
+    livros = []
 
-async def chamadas_externas_2():
-    await asyncio.sleep(2)
-    return "Resultado da chamada externa 2"
+    for chave in chaves:
+        valor = redis_client.get(chave)
+        ttl = redis_client.ttl(chave)
 
-async def chamadas_externas_3():
-    await asyncio.sleep(2)
-    return "Resultado da chamada externa 3"
-
-@app.get("/chamadas-externas")
-async def chamadas_externas():
-    tarefa1 = asyncio.create_task(chamadas_externas_1())
-    tarefa2 = asyncio.create_task(chamadas_externas_2())
-    tarefa3 = asyncio.create_task(chamadas_externas_3())
-
-    resultado1 = await tarefa1
-    resultado2 = await tarefa2
-    resultado3 = await tarefa3
-
-    return {
-        "mensagem": "Todas as chamadas nas APIs foram concluídas com sucesso.",
-        "resultado": [resultado1, resultado2, resultado3]
-    }
+        livros.append({
+            "chave": chave,
+            "valor": json.loads(valor),
+            "ttl": ttl
+        })
+    
+    return livros
 
 @app.get("/livros")
-async def get_livros(page: int = 1, limit: int = 10, db: Session = Depends(sessao_db), credentials: HTTPBasicCredentials = Depends(autenticar_meu_usuario)):
+def get_livros(
+    page: int = 1,
+    limit: int = 10,
+    db: Session = Depends(sessao_db),
+    credentials: HTTPBasicCredentials = Depends(autenticar_meu_usuario)
+):
     if page < 1 or limit < 1:
-        raise HTTPException(status_code=400, detail="Parâmetros inválidos. 'page' e 'limit' devem ser maiores que 0.")
+        raise HTTPException(status_code=400, detail="Page ou limit estão com valores inválidos.")
+    
+    cache_key = f"livros:page={page}&limit={limit}"
+    cached = redis_client.get(cache_key)
+
+    if cached:
+        return json.loads(cached)
     
     livros = db.query(LivroDB).offset((page - 1) * limit).limit(limit).all()
 
     if not livros:
-        return {"message": "Nenhum livro cadastrado."}
+        return {"message": "Nenhum livro encontrado."}
     
     total_livros = db.query(LivroDB).count()
 
-    return {
+    resposta = {
         "page": page,
         "limit": limit,
-        "total_livros": total_livros,
-        "livros": [{"id": livro.id, "nome_livro": livro.nome_livro, "autor_livro": livro.autor_livro, "ano_livro": livro.ano_livro} for livro in livros]
+        "total": total_livros,
+        "livros": [
+            {
+                "id": livro.id,
+                "nome_livro": livro.nome_livro,
+                "autor_livro": livro.autor_livro,
+                "ano_livro": livro.ano_livro
+            } for livro in livros
+        ]
     }
+
+    redis_client.setex(cache_key, 30, json.dumps(resposta))
+
+    return resposta
     
 @app.post("/adiciona")
 async def post_livros(livro: Livro, db: Session = Depends(sessao_db), credentials: HTTPBasicCredentials = Depends(autenticar_meu_usuario)):
@@ -138,6 +160,8 @@ async def post_livros(livro: Livro, db: Session = Depends(sessao_db), credential
     db.add(novo_livro)
     db.commit()
     db.refresh(novo_livro)
+
+    salvar_livro_redis(novo_livro.id, livro)
 
     return {"message": "Livro adicionado com sucesso."}
 
@@ -163,5 +187,7 @@ async def delete_livros(id_livro: int, db: Session = Depends(sessao_db), credent
     
     db.delete(db_livro)
     db.commit()
+
+    deletar_livro_redis(id_livro)
 
     return {"message": "Livro deletado com sucesso."}
