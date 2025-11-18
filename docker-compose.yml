@@ -1,19 +1,42 @@
 version: "3.8"
 
-# Serviços que serão orquestrados pelo Docker Compose
 services:
   app:
-    build: . # Irá construir a imagem a partir do Dockerfile na raiz do projeto
+    build: .
     container_name: livros-api
-    ports: # Mapeia a porta 8000 do container para a porta 8000 do host
+    ports:
       - "8000:8000"
-    volumes: # Mapeia o diretório atual para /app dentro do container
+    volumes:
       - .:/app
-    env_file: # Carrega variáveis de ambiente do arquivo .env 
+    env_file:
       - .env
     command: ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-    deploy:
-      replicas: 5
-      restart_policy:
-        condition: on-failure
-        
+    depends_on:
+      - redis
+    networks:
+      - livros-net
+    
+  redis:
+    image: "redis:7-alpine"
+    container_name: livros-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - livros-net
+    
+  celery:
+    build: .
+    container_name: livros-celery
+    command: ["poetry", "run", "celery", "-A", "celery_app", "worker", "--loglevel=info"]
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    networks:
+      - livros-net
+
+networks:
+  livros-net:
+    driver: bridge
