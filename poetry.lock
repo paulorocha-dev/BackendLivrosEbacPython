@@ -555,6 +555,26 @@ MarkupSafe = ">=2.0"
 i18n = ["Babel (>=2.7)"]
 
 [[package]]
+name = "kafka-python"
+version = "2.2.16"
+description = "Pure Python client for Apache Kafka"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "kafka_python-2.2.16-py2.py3-none-any.whl", hash = "sha256:76de02eeff40488fc29f01c4cce16f123686b7dad1de3c86bc3459191c5408f1"},
+    {file = "kafka_python-2.2.16.tar.gz", hash = "sha256:abbb2e5b9f7ecb85fd0caa7955ee6cbb1c8257021a94819cd63e0603e82c8dc1"},
+]
+
+[package.extras]
+benchmarks = ["pyperf"]
+crc32c = ["crc32c"]
+lz4 = ["lz4"]
+snappy = ["python-snappy"]
+testing = ["mock ; python_version < \"3.3\"", "pytest", "pytest-mock", "pytest-timeout"]
+zstd = ["zstandard"]
+
+[[package]]
 name = "kombu"
 version = "5.5.4"
 description = "Messaging library for Python."
@@ -1752,4 +1772,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "82eb73e4ab8cf281f2b51c1eb06309bbad277552a4087343f2e7a229e90fedea"
+content-hash = "af91017243c0379daed36d83064b57f4f60f7b79e9708bc4b1117c7205ecb2b3"

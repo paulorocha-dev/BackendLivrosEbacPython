@@ -10,20 +10,22 @@ services:
       - .:/app
     env_file:
       - .env
+    environment:
+      - KAFKA_SERVER=kafka:9092
     command: ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
-      - redis
+      - kafka
     networks:
       - livros-net
-    
+
   redis:
-    image: "redis:7-alpine"
+    image: redis:7-alpine
     container_name: livros-redis
     ports:
       - "6379:6379"
     networks:
       - livros-net
-    
+
   celery:
     build: .
     container_name: livros-celery
@@ -32,8 +34,39 @@ services:
       - .:/app
     depends_on:
       - redis
+      - kafka
     env_file:
       - .env
+    networks:
+      - livros-net
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: livros-kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    networks:
+      - livros-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: livros-kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - kafka
     networks:
       - livros-net
 
