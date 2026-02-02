@@ -28,4 +28,6 @@ jobs:
         run: poetry install --no-interaction --no-root
 
       - name: Rodar testes com Pytest
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
         run: poetry run pytest
