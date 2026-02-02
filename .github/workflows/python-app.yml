@@ -12,16 +12,16 @@ jobs:
 
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Instalar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
       - name: Instalar Poetry
         run: |
-          curl -sSL https://instal.python-poetry.org | python3 -
+          curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Instalar dependências com Poetry
