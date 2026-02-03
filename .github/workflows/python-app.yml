@@ -30,4 +30,6 @@ jobs:
       - name: Rodar testes com Pytest
         env:
           DATABASE_URL: "sqlite:///:memory:"
+          MEU_USUARIO: "admin"
+          MINHA_SENHA: "admin123"
         run: poetry run pytest
