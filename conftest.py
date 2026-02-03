@@ -24,18 +24,11 @@ TestingSessionLocal = sessionmaker(
 )
 
 
-# Cria e destrói as tabelas
-@pytest.fixture(scope="session", autouse=True)
-def create_test_database():
-
-    Base.metadata.create_all(bind=engine)
-
-    yield
-
-    Base.metadata.drop_all(bind=engine)
+# Cria as tabelas IMEDIATAMENTE
+Base.metadata.create_all(bind=engine)
 
 
-# Override da dependência do DB
+# Override do DB
 def override_sessao_db():
 
     db = TestingSessionLocal()
@@ -49,6 +42,6 @@ def override_sessao_db():
 app.dependency_overrides[sessao_db] = override_sessao_db
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def client():
     return TestClient(app)
