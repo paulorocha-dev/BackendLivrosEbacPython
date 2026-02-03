@@ -167,19 +167,24 @@ def get_livros(
     credentials: HTTPBasicCredentials = Depends(autenticar_meu_usuario)
 ):
     if page < 1 or limit < 1:
-        raise HTTPException(status_code=400, detail="Page ou limit estão com valores inválidos.")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="Page ou limit estão com valores inválidos."
+        )
+
     cache_key = f"livros:page={page}&limit={limit}"
     cached = redis_client.get(cache_key)
 
     if cached:
         return json.loads(cached)
-    
-    livros = db.query(LivroDB).offset((page - 1) * limit).limit(limit).all()
 
-    if not livros:
-        return {"message": "Nenhum livro encontrado."}
-    
+    livros = (
+        db.query(LivroDB)
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
     total_livros = db.query(LivroDB).count()
 
     resposta = {
@@ -192,13 +197,15 @@ def get_livros(
                 "nome_livro": livro.nome_livro,
                 "autor_livro": livro.autor_livro,
                 "ano_livro": livro.ano_livro
-            } for livro in livros
+            }
+            for livro in livros
         ]
     }
 
     redis_client.setex(cache_key, 30, json.dumps(resposta))
 
     return resposta
+
     
 @app.post("/adiciona")
 async def post_livros(livro: Livro, db: Session = Depends(sessao_db), credentials: HTTPBasicCredentials = Depends(autenticar_meu_usuario)):
