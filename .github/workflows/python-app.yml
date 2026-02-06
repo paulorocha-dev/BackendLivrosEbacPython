@@ -6,13 +6,57 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  IMAGE_NAME: fastapi-app
+  IMAGE_TAG: latest
+
 jobs:
-  fastapi-docker-test:
+  fastapi-tests:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v3
 
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Instalar dependências
+        run: poetry install --no-interaction --no-root
+
+      - name: Rodar testes
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
+          MEU_USUARIO: "admin"
+          MINHA_SENHA: "admin123"
+        run: poetry run pytest
+
       - name: Build da imagem Docker
-        run: docker build -t my-fastapi-app .
+        run: |
+          docker build \
+            -t $IMAGE_NAME:$IMAGE_TAG \
+            .
+
+      - name: Validar container
+        run: |
+          docker run -d \
+            --name test-container \
+            -p 8000:8000 \
+            $IMAGE_NAME:$IMAGE_TAG
+
+          # Aguarda a aplicação subir
+          sleep 5
+
+          # Verifica se o container está rodando
+          docker ps | grep test-container
+
+          # Encerra e remove
+          docker stop test-container
+          docker rm test-container
