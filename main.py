@@ -14,22 +14,20 @@ from pydantic import BaseModel
 from typing import Optional
 import secrets
 import os
-from dotenv import load_dotenv
-import redis
-import json
-from fastapi import BackgroundTasks
-from tasks import somar, fatorial
-from celery_app import celery_app
-from celery.result import AsyncResult
-from kafka_producer import enviar_evento
+
+# import redis
+# import json
+# from tasks import somar, fatorial
+# from celery_app import celery_app
+# from celery.result import AsyncResult
+# from kafka_producer import enviar_evento
 
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-import asyncio
-
-load_dotenv()
+from elasticsearch import Elasticsearch
+from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./livros.db")
 
@@ -37,10 +35,14 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-REDIS_HOST = os.getenv("REDIS_HOST", "redis")
-REDIS_PORT = os.getenv("REDIS_PORT", 6379)
+ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://elasticsearch:9200")
+ELASTICSEARCH_INDEX = os.getenv("ELASTICSEARCH_INDEX", "livros-logs")
+es_client = Elasticsearch([ELASTICSEARCH_URL])
 
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+# REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+# REDIS_PORT = os.getenv("REDIS_PORT", 6379)
+
+# redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
 
 app = FastAPI(
     title="API de Livros",
@@ -74,11 +76,11 @@ class Livro(BaseModel):
 
 Base.metadata.create_all(bind=engine)
 
-def salvar_livro_redis(livro_id: int, livro: Livro):
-    redis_client.set(f"livro:{livro_id}", json.dumps(livro.model_dump()))
+# def salvar_livro_redis(livro_id: int, livro: Livro):
+#    redis_client.set(f"livro:{livro_id}", json.dumps(livro.model_dump()))
 
-def deletar_livro_redis(livro_id: int):
-    redis_client.delete(f"livro:{livro_id}")
+# def deletar_livro_redis(livro_id: int):
+#    redis_client.delete(f"livro:{livro_id}")
 
 def sessao_db():
     db = SessionLocal()
@@ -103,61 +105,61 @@ def autenticar_meu_usuario(credentials: HTTPBasicCredentials = Depends(security)
 def hello_world():
     return {"message": "Olá, Mundo! A API de Livros está funcionando."}
 
-@app.post("/calcular/soma")
-def calcular_soma(a: int, b: int):
-    tarefa = somar.delay(a, b)
-    redis_client.lpush("tarefas_ids", tarefa.id)
-    redis_client.ltrim("tarefas_ids", 0, 49)
+# @app.post("/calcular/soma")
+# def calcular_soma(a: int, b: int):
+#    tarefa = somar.delay(a, b)
+#    redis_client.lpush("tarefas_ids", tarefa.id)
+#    redis_client.ltrim("tarefas_ids", 0, 49)
 
-    return {
-        "task_id": tarefa.id,
-        "message": "Tarefa de soma enviada para o Celery."
-    }
+#    return {
+#        "task_id": tarefa.id,
+#        "message": "Tarefa de soma enviada para o Celery."
+#    }
 
-@app.post("/calcular/fatorial")
-def calcular_fatorial(n: int):
-    tarefa = fatorial.delay(n)
-    redis_client.lpush("tarefas_ids", tarefa.id)
-    redis_client.ltrim("tarefas_ids", 0, 49)
+# @app.post("/calcular/fatorial")
+# def calcular_fatorial(n: int):
+#    tarefa = fatorial.delay(n)
+#    redis_client.lpush("tarefas_ids", tarefa.id)
+#    redis_client.ltrim("tarefas_ids", 0, 49)
 
-    return {
-        "task_id": tarefa.id,
-        "message": "Tarefa de fatorial enviada para o Celery."
-    }
+#    return {
+#        "task_id": tarefa.id,
+#        "message": "Tarefa de fatorial enviada para o Celery."
+#    }
 
-@app.get("/tarefas/recentes")
-def listar_tarefas_recentes():
-    ids = redis_client.lrange("tarefas_ids", 0, -1)
-    tarefas = []
+#@app.get("/tarefas/recentes")
+#def listar_tarefas_recentes():
+#    ids = redis_client.lrange("tarefas_ids", 0, -1)
+#    tarefas = []
 
-    for task_id in ids:
-        resultado = AsyncResult(task_id, app=celery_app)
-        tarefas.append({
-            "task_id": task_id,
-            "status": resultado.status,
-            "resultado": resultado.result if resultado.successful() else None
-        })
+#    for task_id in ids:
+#        resultado = AsyncResult(task_id, app=celery_app)
+#        tarefas.append({
+#            "task_id": task_id,
+#            "status": resultado.status,
+#            "resultado": resultado.result if resultado.successful() else None
+#        })
 
-    return {
-        "tarefas": tarefas
-    }
+#    return {
+#        "tarefas": tarefas
+#    }
 
-@app.get("/debug/redis")
-def ver_livros_redis():
-    chaves = redis_client.keys("livros:*")
-    livros = []
+# @app.get("/debug/redis")
+# def ver_livros_redis():
+#    chaves = redis_client.keys("livros:*")
+#    livros = []
 
-    for chave in chaves:
-        valor = redis_client.get(chave)
-        ttl = redis_client.ttl(chave)
-
-        livros.append({
-            "chave": chave,
-            "valor": json.loads(valor),
-            "ttl": ttl
-        })
+#    for chave in chaves:
+#        valor = redis_client.get(chave)
+#        ttl = redis_client.ttl(chave)
+#
+#        livros.append({
+#            "chave": chave,
+#            "valor": json.loads(valor),
+#            "ttl": ttl
+#        })
     
-    return livros
+#    return livros
 
 @app.get("/livros")
 def get_livros(
@@ -172,11 +174,11 @@ def get_livros(
             detail="Page ou limit estão com valores inválidos."
         )
 
-    cache_key = f"livros:page={page}&limit={limit}"
-    cached = redis_client.get(cache_key)
+#    cache_key = f"livros:page={page}&limit={limit}"
+#    cached = redis_client.get(cache_key)
 
-    if cached:
-        return json.loads(cached)
+#    if cached:
+#        return json.loads(cached)
 
     livros = (
         db.query(LivroDB)
@@ -185,26 +187,43 @@ def get_livros(
         .all()
     )
 
-    total_livros = db.query(LivroDB).count()
-
-    resposta = {
+    if not livros:
+        response = {"message": "Não existe livro nenhum!"}
+    else:
+        total_livros = db.query(LivroDB).count()
+        response = {
+            "page": page,
+            "limit": limit,
+            "total": total_livros,
+            "livros": [
+                {
+                    "id": livro.id,
+                    "nome_livro": livro.nome_livro,
+                    "autor_livro": livro.autor_livro,
+                    "ano_livro": livro.ano_livro
+                }
+                for livro in livros
+            ]
+        }
+    
+    log = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "endpoint": "/livros",
+        "usuario": credentials.username,
         "page": page,
         "limit": limit,
-        "total": total_livros,
-        "livros": [
-            {
-                "id": livro.id,
-                "nome_livro": livro.nome_livro,
-                "autor_livro": livro.autor_livro,
-                "ano_livro": livro.ano_livro
-            }
-            for livro in livros
-        ]
+        "status": "success" if livros else "not_found",
+        "total_livros": len(livros)
     }
 
-    redis_client.setex(cache_key, 30, json.dumps(resposta))
+    try:
+        es_client.index(index=ELASTICSEARCH_INDEX, body=log)
+    except Exception as e:
+        print(f"Erro ao enviar log para Elasticsearch: {e}")
 
-    return resposta
+#    redis_client.setex(cache_key, 30, json.dumps(response))
+
+    return response
 
     
 @app.post("/adiciona")
@@ -218,12 +237,12 @@ async def post_livros(livro: Livro, db: Session = Depends(sessao_db), credential
     db.commit()
     db.refresh(novo_livro)
 
-    salvar_livro_redis(novo_livro.id, livro)
+#    salvar_livro_redis(novo_livro.id, livro)
 
-    enviar_evento("livros-eventos", {
-        "acao": "criar",
-        "livro": livro.model_dump()
-    })
+#    enviar_evento("livros-eventos", {
+#        "acao": "criar",
+#        "livro": livro.model_dump()
+#    })
 
     return {"message": "Livro adicionado com sucesso."}
 
@@ -250,6 +269,6 @@ async def delete_livros(id_livro: int, db: Session = Depends(sessao_db), credent
     db.delete(db_livro)
     db.commit()
 
-    deletar_livro_redis(id_livro)
+#    deletar_livro_redis(id_livro)
 
     return {"message": "Livro deletado com sucesso."}
